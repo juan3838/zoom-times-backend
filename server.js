@@ -1,55 +1,49 @@
-const express = require("express");
-const mysql = require("mysql2/promise");
-const cors = require("cors");
+const express = require('express');
+const cors = require('cors');
+const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 🔹 Conexión a la base de datos
-// ⚠️ Acá poné los datos de tu hosting de MySQL / MariaDB / Postgres (Railway, PlanetScale, etc.)
-const dbConfig = {
-  host: process.env.DB_HOST || "tu-host",
-  user: process.env.DB_USER || "tu-usuario",
-  password: process.env.DB_PASS || "tu-password",
-  database: process.env.DB_NAME || "noticias_db"
-};
-
-// Middlewares
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-// 🔹 Endpoint: todas las noticias
-app.get("/noticias", async (req, res) => {
-  try {
-    const conn = await mysql.createConnection(dbConfig);
-    const [rows] = await conn.execute("SELECT id, titulo, contenido, fecha_publicacion, categoria FROM noticias ORDER BY fecha_publicacion DESC");
-    await conn.end();
-    res.json(rows);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error obteniendo noticias" });
+// Conexión a Postgres
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME,
+  port: process.env.DB_PORT,
+  ssl: {
+    rejectUnauthorized: false // Necesario para Railway
   }
 });
 
-// 🔹 Endpoint: noticia por ID
-app.get("/noticias/:id", async (req, res) => {
+// Ruta de prueba
+app.get('/', (req, res) => {
+  res.send('✅ Backend de Noticias funcionando');
+});
+
+// Endpoint de noticias
+app.get('/noticias', async (req, res) => {
   try {
-    const conn = await mysql.createConnection(dbConfig);
-    const [rows] = await conn.execute("SELECT * FROM noticias WHERE id = ?", [req.params.id]);
-    await conn.end();
-
-    if (rows.length === 0) {
-      return res.status(404).json({ error: "Noticia no encontrada" });
-    }
-
-    res.json(rows[0]);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error obteniendo noticia" });
+    const result = await pool.query(`
+      SELECT id_noticia, titulo, subtitulo, fecha_publicacion 
+      FROM noticias 
+      WHERE estado = 'publicada'
+      ORDER BY fecha_publicacion DESC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Error al obtener noticias:', err.message);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 
-// 🔹 Servidor en marcha
+// Iniciar servidor
 app.listen(PORT, () => {
-  console.log(`Servidor corriendo en http://localhost:${PORT}`);
+  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
 });
+
